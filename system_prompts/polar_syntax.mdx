@@ -1,0 +1,243 @@
+Polar is a logic programming language.
+
+```polar
+# how to define actors
+actor User {}
+# how to define resources
+resource Organization {
+  # how to define roles, which are groups on permissions on a resource
+  roles = ["member", "manager", "admin"];
+  # how to define permissions, which are actions an actor can take
+  permissions = ["read", "write", "delete"];
+
+  # how to define rules
+  # how to assign permission to role
+  "read" if "member";
+  
+  # how to inherent permissions from one role to another
+  "member" if "manager";
+}
+
+resource Folder {
+  roles = ["reader", "editor", "member"];
+  permissions = ["read", "edit", "delete"];
+  # how to define relationships
+  relations = {
+    creator: User,
+    organization: Organization
+  };
+
+  "read" if "reader";
+
+
+}
+
+resource Document {
+  roles = ["reader", "editor", "member"];
+  permissions = ["read", "edit", "delete"];
+  relations = {
+    creator: User,
+    folder: Folder
+  };
+
+  "edit" if "editor";
+
+  # How to model ReBAC
+  ## how to assign role based on relation
+  "editor" if "creator" on resource;
+
+  ## how to assign permission to relation
+  "edit" if "creator" on resource;
+
+  ## how to assign roles based on role assignment from related resource
+  role if role on "folder"; 
+
+  ## How to 
+  role if role on "folder";
+
+  # how to model ABAC
+  "read" if is_public(resource)
+}
+
+# How to write tests:
+test "org admins can edit tasks" {
+  setup {
+    has_role(User{"alice"}, "admin", Project{"project-1"});
+    has_relation(Task{"task-1"}, "project", Project{"project-1"});
+    has_relation(Task{"task-2"}, "project", Project{"project-2"});
+  }
+
+  assert allow(User{"alice"}, "read", Task{"task-1"});
+  assert_not allow(User{"alice"}, "read", Task{"task-2"});
+}
+
+# Global roles are a special kind of role that aren't associated with any specific resources
+
+global {
+  roles = ["admin"];
+}
+
+# Field-level authorization: 
+## Field-level authorization is useful when a resource (the "field") can only be defined in relationship to another resource (its "parent"). Consider using field-level authorization if you can answer "yes" to either of these questions:
+## Is the resource defined solely in relationship to some other resource?
+## Does the resource identifier uniquely identify the resource?
+## To implement field-level authorization, you can model each of a resource's fields as separate resources.
+# TODO - custom roles, impersonation, conditional, time-based, entitlements, resource creation
+
+# Field-level example:
+resource Organization {
+  roles = ["visitor", "member", "community_admin", "admin"];
+  permissions = ["read", "update"];
+
+  # Role implication
+  # visitor < member < community_admin < admin
+  "visitor" if "member";
+  "member" if "community_admin";
+  "community_admin" if "admin";
+
+  # RBAC
+  "update" if "admin";
+  "read" if "visitor";
+}
+
+# Account permissions
+#
+#         relation          | read | update
+# --------------------------|------|--------
+# owner                     |   ✓  |    ✓
+# admin on parent           |   ✓  |    ✓
+# community_admin on parent |   ✓  |    ✓
+# member on parent          |   ✓  |    -
+# visitor on parent         |   ✓  |    -
+resource Account {
+  permissions = ["read", "update"];
+  relations = { parent: Organization, owner: User };
+
+  "update" if "owner";
+  "update" if "community_admin" on "parent";
+
+  "read" if "update";
+  "read" if "visitor" on "parent";
+}
+
+# Field permissions
+#
+#         relation          | read | update
+# --------------------------|------|--------
+# owner                     |   ✓  |    †
+# admin on parent           |   ✓  |    ✓
+# community_admin on parent |   ✓  |    *
+# member on parent          |   ✓  |    -
+# visitor on parent         |   -  |    -
+#
+# †: owner can update only defined fields on their own account
+# *: community_admin can update only `Field{"username"}`
+resource Field {
+  permissions = ["read", "update"];
+
+  "read" if "update";
+}
+
+# define the set of fields that exist
+has_relation(Field{"username"}, "parent", _: Account);
+has_relation(Field{"email"}, "parent", _: Account);
+
+# allow admins to update any field, even those whose relationship with an
+# account is not defined
+allow_field(user: User, "update", account: Account, _field: Field) if
+  org matches Organization and
+  has_role(user, "admin", org) and
+  has_relation(account, "parent", org);
+
+# allow owners to update fields with a "parent" relationship with the account
+allow_field(user: User, "update", account: Account, field: Field) if
+  has_relation(account, "owner", user) and
+  has_relation(field, "parent", account);
+
+# allow community admins to update only the username field
+allow_field(user: User, "update", account: Account, field: Field) if
+  field = Field{"username"} and
+  org matches Organization and
+  has_role(user, "community_admin", org) and
+  has_relation(account, "parent", org) and
+  # safeguard to check that user does have update on the account.
+  has_permission(user, "update", account) and
+  has_relation(field, "parent", account);
+
+# allow members to read all fields, n.b. visitors cannot read any fields
+allow_field(user: User, "read", account: Account, field: Field) if
+  org matches Organization and
+  has_role(user, "member", org) and
+  has_relation(account, "parent", org) and
+  # safeguard to check that user does have read on the account.
+  has_permission(user, "read", account) and
+  has_relation(field, "parent", account);
+
+test "Fields as resources" {
+  setup {
+    # admin
+    has_role(User{"alice"}, "admin", Organization{"example"});
+    has_relation(Account{"alice"}, "owner", User{"alice"});
+    has_relation(Account{"alice"}, "parent", Organization{"example"});
+
+    # community_admin
+    has_role(User{"bob"}, "community_admin", Organization{"example"});
+    has_relation(Account{"bob"}, "owner", User{"bob"});
+    has_relation(Account{"bob"}, "parent", Organization{"example"});
+
+    # member
+    has_role(User{"charlie"}, "member", Organization{"example"});
+    has_relation(Account{"charlie"}, "owner", User{"charlie"});
+    has_relation(Account{"charlie"}, "parent", Organization{"example"});
+
+    # visitor
+    has_role(User{"dana"}, "visitor", Organization{"example"});
+    has_relation(Account{"dana"}, "owner", User{"dana"});
+    has_relation(Account{"dana"}, "parent", Organization{"example"});
+  }
+
+  # anyone can update defined fields of their own account
+  assert	allow_field(User{"alice"}, "update", Account{"alice"}, Field{"username"});
+  assert	allow_field(User{"charlie"}, "update", Account{"charlie"}, Field{"email"});
+  assert	allow_field(User{"dana"}, "update", Account{"dana"}, Field{"email"});
+
+  # admins can update all defined fields in all accounts
+  assert	allow_field(User{"alice"}, "update", Account{"bob"}, Field{"username"});
+  assert	allow_field(User{"alice"}, "update", Account{"charlie"}, Field{"email"});
+
+  # admins can update all fields in all accounts, including those undefined.
+  assert	allow_field(User{"alice"}, "update", Account{"alice"}, Field{"abc"});
+  assert	allow_field(User{"alice"}, "update", Account{"dana"}, Field{"xyz"});
+
+  # non-admin users cannot update undefined fields of thier own accounts.
+  assert_not	allow_field(User{"bob"}, "update", Account{"bob"}, Field{"xyz"});
+
+  # community admins can only update usernames, but can read all fields
+  assert	allow_field(User{"bob"}, "update", Account{"alice"}, Field{"username"});
+  assert_not	allow_field(User{"bob"}, "update", Account{"alice"}, Field{"email"});
+  assert	allow_field(User{"bob"}, "read", Account{"alice"}, Field{"email"});
+  assert_not	allow_field(User{"bob"}, "update", Account{"dana"}, Field{"email"});
+
+  # members can only read fields from others' accounts
+  assert	allow_field(User{"charlie"}, "read", Account{"alice"}, Field{"username"});
+  assert	allow_field(User{"charlie"}, "read", Account{"bob"}, Field{"email"});
+  assert_not	allow_field(User{"charlie"}, "update", Account{"dana"}, Field{"email"});
+
+  # visitors only have read access to others' accounts
+  assert	allow(User{"dana"}, "read", Account{"alice"});
+  assert	allow(User{"dana"}, "read", Account{"charlie"});
+  assert_not	allow(User{"dana"}, "update", Account{"charlie"});
+
+  # visitors have no field-level access
+  assert_not	allow_field(User{"dana"}, "read", Account{"bob"}, Field{"username"});
+  assert_not	allow_field(User{"dana"}, "read", Account{"charlie"}, Field{"email"});
+  assert_not	allow_field(User{"dana"}, "update", Account{"charlie"}, Field{"email"});
+
+  # granted no permissions on fields directly
+  assert_not	allow(User{"alice"}, "read", Field{"email"});
+  assert_not	allow(User{"alice"}, "update", Field{"username"});
+  assert_not	allow(User{"bob"}, "update", Field{"username"});
+  assert_not	allow(User{"charlie"}, "read", Field{"email"});
+}
+```
+

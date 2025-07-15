@@ -1,40 +1,477 @@
+# Writing Polar Code
+
+## Language Basics
+
+Polar is a declarative logic programming language. You state what should be true; Polar computes how to achieve it.
+
+### How Polar Executes
+
+Rules define when predicates are true:
+
 ```polar
-# how to define actors
+father("SisterBear", "PapaBear");
+father("BrotherBear", "PapaBear");
+```
+
+Multiple rules can use the same predicate.
+
+### Conditional Rules
+
+```polar
+grandfather(grandchild: String, grandparent: String) if
+  parent matches String and
+  father(grandchild, parent) and
+  father(parent, grandparent);
+```
+
+Most rules follow `statement if condition;` form. Variables must be explicitly typed.
+
+## Built-in Types
+
+Polar uses explicitly typed data with two classes of types:
+
+| Class         | Description                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Primitive** | Represents literal values, such as numbers.                                                                 |
+| **Abstract**  | Represents a type that you want to represent in your authorization policy, such as users and organizations. |
+
+### Primitive Types
+
+| Type      | Description           | Example |
+| --------- | --------------------- | ------- |
+| `String`  | String of text        | `"a"`   |
+| `Integer` | 64-bit signed integer | `-3`    |
+| `Boolean` | true or false values  | `true`  |
+
+Use in rule parameters or facts:
+
+```polar
+is_string_a(x: String) if x = "a";
+```
+
+Strings represent permission names, roles, and relations by convention.
+
+#### Object Literal Representation
+
+Express primitives as object literals using type name + value in curly brackets:
+
+```polar
+Boolean{true}
+```
+
+#### Fact Argument Length Limit
+
+Each fact argument has a 384-byte limit. This applies per argument:
+
+```polar
+has_relation(Foo{"<384-byte string>"}, "<384-byte-string>", Bar{"384-byte string>"})
+```
+
+### Abstract Types
+
+| Type       | Description                                                                                              |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| `Resource` | An object to which you want to authorize types of access. Identify subtypes with the `resource` keyword. |
+| `Actor`    | An entity to whom you want to grant types of access. Identify subtypes with the `actor` keyword.         |
+
+Create custom types by extending these abstracts using resource blocks.
+
+Never use abstract types as object literals (e.g., never use `Resource{"foo"}`).
+
+## Rules and Facts
+
+Rules consist of:
+- **Predicate**: Rule name
+- **Parameters**: Named types
+- **Expression**: Optional conditional clause
+
+```polar
+within(lower: Integer, upper: Integer, x: Integer) if lower < x and x < upper;
+```
+
+### Facts
+
+Rules without expressions are facts (unconditionally true):
+
+```polar
+parent("Bernie", "Pat");
+parent("Bernie", "Morgan");
+```
+
+### Variable Typing
+
+Use `matches` for new variables:
+
+```polar
+family(a: String, b: String) if
+  parent matches String and
+  parent(a, parent) and parent(parent, b);
+```
+
+### Literal Parameters
+
+Rules can use literal values:
+
+```polar
+cities_to_visit("Phoenix", season: String) if is_cold(season);
+```
+
+### Default Allow Rules
+
+If no `allow` predicate exists, Polar includes:
+
+```polar
+allow(actor, action, resource) if has_permission(actor, action, resource);
+allow(actor, action) if has_permission(actor, action);
+```
+
+### Deny Logic
+
+Create deny rules using negation in allow rules:
+
+```polar
+allow(actor: Actor, action: String, resource: Resource) if
+  has_permission(actor, action, resource) and
+  not is_banned(actor);
+```
+
+### Singletons
+
+Variables occurring only once generate warnings. Prefix with `_` to suppress or use `_` for anonymous variables.
+
+### Fact Limits
+
+- No hard limit on stored facts
+- Context facts limited by 10 MiB request payload
+- Each fact argument ≤384 bytes
+
+## Operators
+
+### Unification (=)
+
+Checks if operands unify (are equal or can be made equal with variable bindings):
+
+```polar
+"a" = "a"
+x = "a"
+["a", "b"] = [x, "b"]
+```
+
+String unification is case-sensitive.
+
+### Conjunction (and)
+
+Both conditions must hold:
+
+```polar
+oso_employee(first, last) if
+  is_user(first, last) and
+  is_employee("Oso", first, last);
+```
+
+### Disjunction (or)
+
+Either condition must hold:
+
+```polar
+is_user(first, last) if
+  oso_employee(first, last) or
+  is_guest(first, last);
+```
+
+### Negation (not)
+
+Checks that a fact does not exist:
+
+```polar
+allow(user, action, resource) if
+  not is_banned(user) and
+  has_permission(user, action, resource);
+```
+
+Restrictions:
+- Can only negate a single fact
+- Variables in negated facts must appear in non-negated facts in the same rule
+- MUST NOT USE in shorthand rules (within curly braces)
+
+### List Membership (in)
+
+Iterates over string lists:
+
+```polar
+x in ["a", "b", "c"]
+x in ["a", "b", "c"] and x = "a"
+"a" in ["a", "b", "c", "a"]
+```
+
+### Integer Comparisons
+
+Use `<`, `<=`, `>`, `>=` for integers:
+
+```polar
+expires_after_y2k38(resource) if
+  expires_at(resource, time) and time > 2147483647
+```
+
+### Matches Operator
+
+Assert variable type when introducing new variables:
+
+```polar
+role_on_resource(actor: Actor, role: String, resource: Resource) if
+  group matches Group and
+  has_group(actor, group) and
+  has_role(group, role, resource);
+```
+
+### Operator Precedence
+
+From highest to lowest:
+1. `in, matches`
+2. `=, <, <=, >, >=`
+3. `not`
+4. `and`
+5. `or`
+
+Use parentheses `()` to override precedence.
+
+## Resource Blocks
+
+Resource blocks declare custom types and provide RBAC/ReBAC features.
+
+### Basic Syntax
+
+```polar
 actor User {}
-# how to define resources
+resource Repository {}
+```
+
+Each type must be declared as `actor` or `resource`.
+
+### Global Block
+
+One optional global block per policy for global roles/permissions:
+
+```polar
+global {
+  roles = ["admin"];
+}
+
 resource Organization {
-  # how to define roles, which are groups on permissions on a resource
-  roles = ["member", "manager", "admin"];
-  # how to define permissions, which are actions an actor can take
-  permissions = ["read", "write", "delete"];
-
-  # how to define rules
-  # how to assign permission to role
-  "read" if "member";
-  
-  # how to inherent permissions from one role to another
-  "member" if "manager";
+  roles = ["internal_admin"];
+  "internal_admin" if global "admin";
 }
+```
 
-resource Document {
-  roles = ["reader", "editor"];
-  permissions = ["read", "edit", "delete"];
-  # how to define relationships
-  relations = {
-    creator: User,
-    organization: Organization
-  };
+### Permissions, Roles, and Relations
 
-  # how to use relations (ReBAC)
-  # how to assign role to relation
-  "editor" if "creator" on resource;
-  # how to assign permission to relation
-  "edit" if "creator" on resource;
+#### Permissions
 
-  # how to assign roles based on relationship
-  "editor" if "admin" on "organization"; 
+Actions that actors can perform:
 
-  # how to model ABAC
-  "read" if is_public 
+```polar
+resource Repository {
+  permissions = ["read", "push"];
 }
+```
+
+#### Roles
+
+Actor classifications:
+
+```polar
+resource Repository {
+  roles = ["contributor", "maintainer", "admin"];
+}
+```
+
+#### Relations
+
+Relationships between resources:
+
+```polar
+resource Repository {
+  relations = { parent: Organization };
+}
+```
+
+Requirements:
+- Values must be string literals
+- Each feature declared at most once per block
+- Values must be unique within each block
+- Must be declared to use in shorthand rules
+
+### Shorthand Rules
+
+Basic form:
+
+```polar
+<role or permission> if <expression>;
+```
+
+Example:
+
+```polar
+resource Repository {
+  permissions = ["read", "push"];
+  roles = ["contributor", "maintainer"];
+  relations = { parent: Organization };
+
+  "read" if "contributor";
+  "push" if "maintainer";
+  "admin" if "admin" on "parent";
+}
+```
+
+#### Left-hand Side
+
+Can be:
+- A role: `"contributor"`
+- A permission: `"read"`
+- Keywords `role` or `permission` (any role/permission)
+
+#### Right-hand Side
+
+Can be:
+- Role: `"contributor"`
+- Permission: `"read"`
+- Role/permission on relation: `"reader" on "parent"`
+- Rule call: `is_public(resource)`
+
+Combine with `and` and `or`.
+
+#### Expansion Examples
+
+Without relation:
+
+```polar
+"read" if "contributor";
+# Expands to:
+has_permission(actor: Actor, "read", resource: Repository) if has_role(actor, "contributor", resource);
+```
+
+With relation:
+
+```polar
+"admin" if "owner" on "parent";
+# Expands to:
+has_role(actor: Actor, "admin", resource: Repository) if 
+  has_role(actor, "owner", related) and 
+  has_relation(resource, "parent", related);
+```
+
+Global reference:
+
+```polar
+"internal_admin" if global "admin";
+# Expands to:
+has_role(actor: Actor, "internal_admin", organization: Organization) if has_role(actor, "admin");
+```
+
+### Referencing Resources
+
+Use object literal syntax:
+
+```polar
+ResourceName{"ident"}
+```
+
+## Polymorphism (`extends`)
+
+Polar supports subtype polymorphism through `extends`.
+
+### Actor and Resource Types
+
+Types declared as `resource` extend `Resource`; types declared as `actor` extend `Actor`. This enables shorthand rules to work with all declared types.
+
+```polar
+actor User {};
+resource Issue {};
+```
+
+Creates relationships:
+
+| Supertype  | Subtype |
+| ---------- | ------- |
+| `Actor`    | `User`  |
+| `Resource` | `Issue` |
+
+#### Actor Extends Resource
+
+`Actor` extends `Resource`, so parameters accepting `Resource` also accept `Actor` values.
+
+### Extending User Types
+
+Syntax:
+
+```
+(actor | resource) Subtype extends Supertype {}
+```
+
+Provides:
+- Rule-type polymorphism: rules referencing supertypes accept subtype values
+- Inherited permissions, roles, and relations
+
+#### Unification
+
+Subtype values don't unify with their supertype:
+
+```polar
+resource Document extends File {}
+```
+
+This is always false:
+
+```polar
+Document{"a"} = File{"a"}
+```
+
+#### Query Type Filtering
+
+Type filters in queries exclude subtypes. Specifying `File` won't return `Document` values.
+
+## Facts as Data
+
+Store facts outside your policy for dynamic authorization data.
+
+### Construction
+
+Facts stored as data must:
+- Be unconditionally true (no `if` clause)
+- Have all primitive values or object literals
+
+```polar
+integer_string_eq(2, "two");
+```
+
+### Type Inference
+
+Oso infers fact types from policy usage:
+
+```polar
+has_permission(user: User, "pet", dog: Dog) if are_friends(user, dog);
+```
+
+Oso accepts only `are_friends(User, Dog)` facts.
+
+### Overriding Inferred Types
+
+Use `declare` for facts not used in policy:
+
+```polar
+declare has_tag(User, Tag);
+declare has_tag(Dog, Tag);
+```
+
+Creates union types - facts matching any declared or inferred type are accepted.
+
+## Built-in Constants
+
+### `@current_unix_time`
+
+Returns current Unix timestamp as `Integer`:
+
+```polar
+has_permission(_: Actor, "read", file: File) if
+  expires_at(file, time) and @current_unix_time < time;
 ```

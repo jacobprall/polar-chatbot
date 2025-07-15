@@ -1,0 +1,15 @@
+Write a polar policy that meets the following specification:
+- actors: User
+- Resources: 
+  - Organization
+    - roles: admin, member
+    - permissions: read, write
+    - relations: Documents
+  - Documents
+    - roles: reader, editor
+    - permissions: read, edit
+    - relations: creator:User, organization:Organization
+    - attributes: is_private
+- Rules:
+  - Users who are admins of an organization can read and edit all documents related to that organization
+  - Users who are members of an organization can read any document that isn't is_private
