@@ -179,20 +179,6 @@ is_user(first, last) if
   is_guest(first, last);
 ```
 
-### Negation (not)
-
-Checks that a fact does not exist:
-
-```polar
-allow(user, action, resource) if
-  not is_banned(user) and
-  has_permission(user, action, resource);
-```
-
-Restrictions:
-- Can only negate a single fact
-- Variables in negated facts must appear in non-negated facts in the same rule
-- MUST NOT USE in shorthand rules (within curly braces)
 
 ### List Membership (in)
 
