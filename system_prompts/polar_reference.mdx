@@ -1,0 +1,40 @@
+```polar
+# how to define actors
+actor User {}
+# how to define resources
+resource Organization {
+  # how to define roles, which are groups on permissions on a resource
+  roles = ["member", "manager", "admin"];
+  # how to define permissions, which are actions an actor can take
+  permissions = ["read", "write", "delete"];
+
+  # how to define rules
+  # how to assign permission to role
+  "read" if "member";
+  
+  # how to inherent permissions from one role to another
+  "member" if "manager";
+}
+
+resource Document {
+  roles = ["reader", "editor"];
+  permissions = ["read", "edit", "delete"];
+  # how to define relationships
+  relations = {
+    creator: User,
+    organization: Organization
+  };
+
+  # how to use relations (ReBAC)
+  # how to assign role to relation
+  "editor" if "creator" on resource;
+  # how to assign permission to relation
+  "edit" if "creator" on resource;
+
+  # how to assign roles based on relationship
+  "editor" if "admin" on "organization"; 
+
+  # how to model ABAC
+  "read" if is_public 
+}
+```
