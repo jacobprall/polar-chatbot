@@ -35,10 +35,11 @@ def test_new_architecture():
     )
     
     output_file_path = f"results/new-test-{datetime.now().isoformat().replace(':', '-').replace('.', '-')}.polar"
+    prompt = open("data/user_requirements/test_1.mdx", "r").read().strip()
     
     # Create request
     request = PolicyRequest(
-        prompt="Write a polar policy that meets the following specification:\n- actors: User\n- Resources: Organization, Documents\n- Rules: Users who are admins can read and edit all documents",
+        prompt=prompt,
         system_prompts=default_system_prompts,
         output_file_path=output_file_path
     )
@@ -57,8 +58,5 @@ def test_new_architecture():
         print(f"❌ New architecture test failed: {response.error_message}")
 
 if __name__ == "__main__":
-    print("Running legacy test...")
-    test_legacy_run()
-    
     print("\nRunning new architecture test...")
     test_new_architecture()
