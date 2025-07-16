@@ -5,8 +5,8 @@ from pathlib import Path
 
 from ..models.policy_request import PolicyRequest, PolicyResponse, ValidationStatus
 from ..models.config import AppConfig
-from ..services import AIService, GenerationRequest
-from ..storage import StorageBackend
+from ..services import AIService, GenerationRequest, OpenAIService
+from ..storage import StorageBackend, LocalStorageBackend
 from .validator import PolarValidator
 from .error_handler import ErrorHandler
 
@@ -26,6 +26,35 @@ class PolicyGenerator:
         self.validator = validator
         self.error_handler = error_handler
         self.config = config
+
+    @classmethod
+    def from_config(cls, config: AppConfig) -> 'PolicyGenerator':
+        """Create a PolicyGenerator instance from configuration"""
+        # Setup AI service
+        ai_service = OpenAIService(
+            api_key=config.ai.api_key,
+            default_model=config.ai.model
+        )
+        
+        # Setup storage backend
+        storage_backend = LocalStorageBackend(config.storage.base_path)
+        
+        # Setup validator
+        validator = PolarValidator(
+            cli_path=config.polar.cli_path,
+            timeout=config.polar.validation_timeout
+        )
+        
+        # Setup error handler
+        error_handler = ErrorHandler(ai_service, storage_backend)
+        
+        return cls(
+            ai_service=ai_service,
+            storage_backend=storage_backend,
+            validator=validator,
+            error_handler=error_handler,
+            config=config
+        )
     
     def generate_policy(self, request: PolicyRequest) -> PolicyResponse:
         """Generate a policy from the given request"""

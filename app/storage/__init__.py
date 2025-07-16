@@ -39,3 +39,13 @@ class StorageBackend(ABC):
     def object_exists(self, key: str) -> bool:
         """Check if an object exists"""
         pass
+
+# Import concrete implementations
+from .local_storage import LocalStorageBackend
+
+# Export all public classes
+__all__ = [
+    'StorageBackend',
+    'StorageObject',
+    'LocalStorageBackend'
+]

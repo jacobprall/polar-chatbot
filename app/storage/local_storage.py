@@ -1,10 +1,20 @@
 import os
 from pathlib import Path
 from typing import Optional, List, Dict
-from . import StorageBackend, StorageObject
-from app.models.config import AppConfig
-from app.models.policy_request import PolicyRequest
-from app.core.policy_generator import PolicyGenerator
+from abc import ABC
+from dataclasses import dataclass
+
+@dataclass
+class StorageObject:
+    """Represents a storage object with metadata"""
+    key: str
+    content: str
+    content_type: str = "text/plain"
+    metadata: Optional[Dict[str, str]] = None
+
+class StorageBackend(ABC):
+    """Abstract storage backend following S3-like patterns"""
+    pass
 
 class LocalStorageBackend(StorageBackend):
     """Local filesystem implementation of storage backend"""
@@ -103,19 +113,3 @@ class LocalStorageBackend(StorageBackend):
         }
         return content_types.get(extension.lower(), 'text/plain') 
 
-# Create configuration
-config = AppConfig.from_file('config.yaml')
-
-# Create generator
-generator = PolicyGenerator.from_config(config)
-
-# Generate policy
-request = PolicyRequest(
-    prompt="Your prompt here",
-    system_prompts=["data/system_prompts/polar_syntax.mdx"],
-    output_directory="results"
-)
-
-response = generator.generate_policy(request)
-if response.is_valid():
-    print(f"Policy generated: {response.file_path}")

@@ -29,19 +29,15 @@ class AIService(ABC):
     @abstractmethod
     def get_available_models(self) -> list[str]:
         """Get list of available models"""
-        pass 
+        pass
 
-@dataclass
-class PolicyRequest:
-    prompt: str
-    system_prompts: List[str]
-    output_directory: str = "./results"
-    output_filename: str = "generated_policy.polar"
-    
-@dataclass
-class PolicyResponse:
-    success: bool
-    file_path: Optional[Path] = None
-    error_message: Optional[str] = None
-    validation_passed: bool = False
-    retry_attempts: int = 0 
+# Import concrete implementations
+from .openai_service import OpenAIService
+
+# Export all public classes
+__all__ = [
+    'AIService',
+    'GenerationRequest', 
+    'GenerationResponse',
+    'OpenAIService'
+]
