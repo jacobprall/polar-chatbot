@@ -1,24 +1,20 @@
 ai:
-  provider: "openai"
-  model: "gpt-4"
+  model: gpt-4
+  provider: openai
   temperature: 0.1
   timeout: 30
-
-storage:
-  backend: "local"
-  base_path: "./"
-
-polar:
-  cli_path: "oso-cloud"
-  validation_timeout: 30
-  max_retry_attempts: 3
-
-paths:
-  system_prompts: "data/system_prompts"
-  user_inputs: "data/user_input"
-  results: "results"
-  tests: "tests"
-
 logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  level: INFO
+paths:
+  results: results
+  system_prompts: data/system_prompts
+  tests: tests
+  user_inputs: data/user_requirements
+polar:
+  cli_path: oso-cloud
+  max_retry_attempts: 3
+  validation_timeout: 30
+storage:
+  backend: local
+  base_path: ./

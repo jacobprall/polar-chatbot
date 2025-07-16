@@ -96,8 +96,7 @@ def generate(ctx, prompt_file, system_prompts, output_dir, output_filename, mode
     request = PolicyRequest(
         prompt=prompt_obj.content,
         system_prompts=list(system_prompts),
-        output_directory=output_dir,
-        output_filename=output_filename,
+        output_file_path=f"{output_dir}/{output_filename}",
         model_config=model_config
     )
     

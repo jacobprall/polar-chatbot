@@ -157,14 +157,14 @@ class PolicyGenerator:
                                  start_time: float) -> PolicyResponse:
         """Handle validation failure by attempting to fix the policy"""
         
-        # Try to fix the policy using error handler
-        fix_attempt = self.error_handler.fix_policy(
+        # Retry the policy using error handler
+        retry_attempt = self.error_handler.retry_policy(
             original_content=generation_response.content,
             error_message=validation_result.error_message,
             system_prompts=request.system_prompts
         )
         
-        if not fix_attempt:
+        if not retry_attempt:
             # Could not fix the policy
             generation_time = time.time() - start_time
             return PolicyResponse(
@@ -185,7 +185,7 @@ class PolicyGenerator:
         
         success = self.storage_backend.put_object(
             key=fixed_key,
-            content=fixed_content,
+            content=retry_attempt,
             content_type="text/plain"
         )
         
@@ -200,7 +200,7 @@ class PolicyGenerator:
             )
         
         # Validate the fixed policy
-        fixed_validation = self.validator.validate_policy(fixed_content)
+        fixed_validation = self.validator.validate_policy(retry_attempt)
         
         generation_time = time.time() - start_time
         
@@ -208,7 +208,7 @@ class PolicyGenerator:
             return PolicyResponse(
                 success=True,
                 file_path=fixed_key,
-                content=fixed_content,
+                content=retry_attempt,
                 validation_status=ValidationStatus.FIXED,
                 retry_attempts=1,
                 model_used=generation_response.model_used,
@@ -219,7 +219,7 @@ class PolicyGenerator:
             return PolicyResponse(
                 success=False,
                 file_path=fixed_key,
-                content=fixed_content,
+                content=retry_attempt,
                 error_message=f"Fixed policy still has validation errors: {fixed_validation.error_message}",
                 validation_status=ValidationStatus.FAILED,
                 validation_errors=fixed_validation.errors,

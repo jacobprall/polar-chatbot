@@ -14,7 +14,7 @@ class ErrorHandler:
         self.ai_service = ai_service
         self.storage_backend = storage_backend
     
-    def fix_policy(self, original_content: str, error_message: str, 
+    def retry_policy(self, original_content: str, error_message: str, 
                    system_prompts: List[str]) -> Optional[str]:
         """Attempt to fix Polar policy syntax errors"""
         try:
@@ -38,13 +38,13 @@ class ErrorHandler:
                 return None
             
             # Clean up the response (remove markdown formatting if present)
-            fixed_content = self._clean_response(generation_response.content)
+            cleaned_content = self._clean_response(generation_response.content)
             
             logger.info("Successfully generated error correction")
-            return fixed_content
+            return cleaned_content
             
         except Exception as e:
-            logger.error(f"Error in fix_policy: {e}")
+            logger.error(f"Error in retry_policy: {e}")
             return None
     
     def _build_error_prompt(self, original_content: str, error_message: str, 
