@@ -64,8 +64,10 @@ class AppConfig:
         
         with open(config_path, 'r') as f:
             config_data = yaml.safe_load(f)
-        config_data["ai"]["api_key"] = os.getenv("OPENAI_API_KEY", "REMOVED")
-        print(f"OpenAI API key: {config_data['ai']['api_key']}")
+        # Load API key from environment variable
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            config_data.setdefault("ai", {})["api_key"] = api_key
         return cls(
             ai=AIConfig(**config_data.get("ai", {})),
             storage=StorageConfig(**config_data.get("storage", {})),
