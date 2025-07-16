@@ -8,7 +8,7 @@ pip install -r requirements.txt
 # Initialize configuration
 python -m app.cli init
 
-# Generate policy
+# Generate and validate policy
 python -m app.cli generate --prompt-file data/user_requirements/test_1.mdx
 
 # Validate policy
