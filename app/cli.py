@@ -1,7 +1,6 @@
 import click
 import logging
-from pathlib import Path
-from typing import List
+from datetime import datetime
 
 from .models.config import AppConfig
 from .models.policy_request import PolicyRequest
@@ -61,13 +60,13 @@ def cli(ctx, config):
 @click.option('--prompt-file', required=True, help='Path to prompt file')
 @click.option('--system-prompts', multiple=True, help='System prompt files')
 @click.option('--output-dir', default='./results', help='Output directory')
-@click.option('--output-filename', default='generated_policy.polar', help='Output filename')
+@click.option('--output-filename', default='test-' + datetime.now().strftime("%Y%m%d%H%M%S") + '.polar', help='Output filename')
 @click.option('--model', help='AI model to use')
 @click.option('--temperature', type=float, help='AI temperature setting')
 @click.pass_context
 def generate(ctx, prompt_file, system_prompts, output_dir, output_filename, model, temperature):
     """Generate a Polar policy from a prompt file"""
-    config = ctx.obj['config']
+    config = AppConfig.from_file("config.yaml")
     
     # Read prompt file
     storage_backend = LocalStorageBackend()

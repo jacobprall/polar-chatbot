@@ -28,7 +28,8 @@ class ErrorHandler:
             # Generate fix using AI service
             generation_request = GenerationRequest(
                 system_prompt="You are a Polar policy syntax expert. Fix syntax errors in Polar code and return only the corrected code without any markdown formatting.",
-                user_prompt=error_prompt
+                user_prompt=error_prompt,
+                model_config={}
             )
             
             generation_response = self.ai_service.generate(generation_request)

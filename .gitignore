@@ -1,3 +1,5 @@
 demo_env
+demo_venv
 */__pycache__/
 */*/__pycache__/
+.env

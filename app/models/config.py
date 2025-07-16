@@ -64,7 +64,8 @@ class AppConfig:
         
         with open(config_path, 'r') as f:
             config_data = yaml.safe_load(f)
-        
+        config_data["ai"]["api_key"] = os.getenv("OPENAI_API_KEY", "REMOVED")
+        print(f"OpenAI API key: {config_data['ai']['api_key']}")
         return cls(
             ai=AIConfig(**config_data.get("ai", {})),
             storage=StorageConfig(**config_data.get("storage", {})),
@@ -80,7 +81,7 @@ class AppConfig:
                 "provider": self.ai.provider,
                 "model": self.ai.model,
                 "temperature": self.ai.temperature,
-                "timeout": self.ai.timeout
+                "timeout": self.ai.timeout,
             },
             "storage": {
                 "backend": self.storage.backend,

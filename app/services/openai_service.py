@@ -7,7 +7,7 @@ class OpenAIService(AIService):
     """OpenAI implementation of AI service"""
     
     def __init__(self, api_key: Optional[str] = None, default_model: str = "gpt-4"):
-        self.api_key = api_key or os.getenv("OPENAI_APIKEY")
+        self.api_key = api_key
         if not self.api_key:
             raise ValueError("OpenAI API key is required")
         
@@ -27,10 +27,15 @@ class OpenAIService(AIService):
                     {"role": "system", "content": request.system_prompt},
                     {"role": "user", "content": request.user_prompt}
                 ],
-                **{k: v for k, v in model_config.items() if k != "model"}
+                temperature=request.model_config.get("temperature", 1)
             )
             
             content = response.choices[0].message.content
+            # Clean content by removing polar code block markers if present
+            if content.startswith("```polar"):
+                content = content[8:]  # Remove ```polar
+            if content.endswith("```"):
+                content = content[:-3]  # Remove ```
             tokens_used = response.usage.total_tokens if response.usage else None
             
             return GenerationResponse(

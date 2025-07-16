@@ -1,7 +1,7 @@
 ai:
   model: gpt-4
   provider: openai
-  temperature: 0.1
+  temperature: 1
   timeout: 30
 logging:
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
