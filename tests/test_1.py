@@ -2,7 +2,7 @@ from datetime import datetime
 from app.main import run, default_system_prompts
 from app.models.config import AppConfig
 from app.models.policy_request import PolicyRequest
-from app.core.generator import PolicyGenerator
+from app.core.policy_generator import PolicyGenerator
 from app.services.openai_service import OpenAIService
 from app.storage.local_storage import LocalStorageBackend
 from app.core.validator import PolarValidator

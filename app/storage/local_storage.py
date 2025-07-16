@@ -4,7 +4,7 @@ from typing import Optional, List, Dict
 from . import StorageBackend, StorageObject
 from app.models.config import AppConfig
 from app.models.policy_request import PolicyRequest
-from app.core.generator import PolicyGenerator
+from app.core.policy_generator import PolicyGenerator
 
 class LocalStorageBackend(StorageBackend):
     """Local filesystem implementation of storage backend"""

@@ -1,4 +1,4 @@
-from .generator import PolicyGenerator
+from .policy_generator import PolicyGenerator
 from .validator import PolarValidator, ValidationResult
 from .error_handler import ErrorHandler
 

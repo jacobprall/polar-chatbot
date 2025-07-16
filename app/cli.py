@@ -9,7 +9,7 @@ from .services.openai_service import OpenAIService
 from .storage.local_storage import LocalStorageBackend
 from .core.validator import PolarValidator
 from .core.error_handler import ErrorHandler
-from .core.generator import PolicyGenerator
+from .core.policy_generator import PolicyGenerator
 
 def setup_logging(config: AppConfig):
     """Setup logging configuration"""

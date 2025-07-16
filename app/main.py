@@ -17,7 +17,7 @@ from .services.openai_service import OpenAIService
 from .storage.local_storage import LocalStorageBackend
 from .core.validator import PolarValidator
 from .core.error_handler import ErrorHandler
-from .core.generator import PolicyGenerator
+from .core.policy_generator import PolicyGenerator
 
 def create_policy_generator(config: Optional[AppConfig] = None) -> PolicyGenerator:
     """Create and configure the policy generator"""

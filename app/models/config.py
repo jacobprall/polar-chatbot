@@ -36,7 +36,7 @@ class PolarConfig:
 class PathsConfig:
     """Path configuration"""
     system_prompts: str = "data/system_prompts"
-    user_inputs: str = "data/user_input"
+    user_inputs: str = "data/user_requirements"
     results: str = "results"
     tests: str = "tests"
 
