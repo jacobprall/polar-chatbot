@@ -1,19 +1,22 @@
 from datetime import datetime
-from app.main import read_file, run
+from app.main import read_file, run, default_system_prompts
+
+test_prompt_path = "app/user_input/test_1.mdx"
 
 def test_run():
-    test_file = read_file("./app/user_input/test_1.mdx")
+    prompt = read_file(test_prompt_path)
+    test_id = datetime.now().isoformat().replace(':', '-').replace('.', '-')
+    result_file_name = "test-" + f"{test_id}.polar"
+    
     run(
-        [
-            "./app/system_prompts/output_instructions.mdx", 
-            "./app/system_prompts/polar_reference.mdx", 
-            "./app/system_prompts/polar_syntax.mdx",
-            "./app/system_prompts/sample_1.polar"
-        ],
-        test_file,
-        "./app/results",
-        "test-" + f"{datetime.now()}"
+        default_system_prompts,
+        prompt,
+        "app/results",
+        result_file_name
     )
+
+    print("completed test run")
+
 
 if __name__ == "__main__":
     test_run()
