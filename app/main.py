@@ -1,13 +1,12 @@
 import os
 from openai import OpenAI
 from typing import Optional
-from datetime import datetime
 from dotenv import load_dotenv
 import subprocess
 
 load_dotenv()
 
-def read_mdx_file(file_path: str) -> Optional[str]:
+def read_file(file_path: str) -> Optional[str]:
     """
     Read an MDX file and return its content as a string.
     
@@ -27,7 +26,6 @@ def read_mdx_file(file_path: str) -> Optional[str]:
     except Exception as e:
         print(f"Error reading file '{file_path}': {e}")
         return None
-
 
 def call_openai(system_prompt: str, user_input: str, model: str = "gpt-4.1") -> Optional[str]:
     """
@@ -99,6 +97,37 @@ def write_polar_file(content: str, directory: str, filename: str = "policy.polar
         print(f"Error writing .polar file: {e}")
         return None
 
+def retry_on_error(polar_code: str, error_message: str) -> Optional[str]:
+    """
+    Retry fixing polar code when validation fails by sending the error to OpenAI.
+    
+    Args:
+        polar_code (str): The original polar code that failed validation
+        error_message (str): The error message from validation
+    
+    Returns:
+        Optional[str]: The fixed polar code, or None if fixing failed
+    """
+    try:
+        fix_prompt = read_file("./system_prompts/handle_error.mdx")
+        user_input = f"{fix_prompt} \n {error_message} \n {polar_code})"
+        # Call OpenAI to fix the code
+        print("Attempting to fix Polar syntax error...")
+        fixed_code = call_openai(
+            system_prompt="You are a Polar policy syntax expert. Fix syntax errors in Polar code and return only the corrected code.",
+            user_input=user_input
+        )
+        
+        if fixed_code is None:
+            print("Error: Failed to get fix from OpenAI API.")
+            return None
+        
+        print("Code fix attempt completed.")
+        return fixed_code
+        
+    except Exception as e:
+        print(f"Error in retry_on_error function: {e}")
+        return None
 
 
 def validate_polar_syntax(file_path: str) -> Optional[str]:
@@ -119,11 +148,12 @@ def validate_polar_syntax(file_path: str) -> Optional[str]:
             text=True,
             check=True
         )
-        return result.stdout
+        return None
     except subprocess.CalledProcessError as e:
         print(f"Error running oso-cloud validate: {e}")
         print(f"stderr: {e.stderr}")
-        return None
+        print("Retrying with added context")
+        return e.stderr
     except FileNotFoundError:
         print("Error: oso-cloud CLI not found. Make sure it's installed and in your PATH")
         return None
@@ -147,7 +177,7 @@ def run(file_paths: list[str], prompt: str, output_directory: str = "./policies"
         # Step 1: Read and concatenate all files
         concatenated_content = ""
         for file_path in file_paths:
-            content = read_mdx_file(file_path)
+            content = read_file(file_path)
             if content is None:
                 print(f"Error: Could not read file '{file_path}'. Skipping...")
                 continue
@@ -177,8 +207,12 @@ def run(file_paths: list[str], prompt: str, output_directory: str = "./policies"
         print("Validating .polar file...")
         validation_result = validate_polar_syntax(file_path)
         
-        if validation_result is None:
+        if validation_result is not None:
             print("Error: Failed to validate .polar file.")
+            retry_on_error(read_file(file_path), validation_result)
+            retry_validation_result = validate_polar_syntax(file_path)
+            print(f"Retry validation result: {retry_validation_result}")
+
             return
         
         print("Validation successful!")
@@ -189,14 +223,3 @@ def run(file_paths: list[str], prompt: str, output_directory: str = "./policies"
     except Exception as e:
         print(f"Unexpected error in run function: {e}")
         return
-
-
-def test_run():
-    run(
-        ["./system_prompts/output_instructions.mdx", "./system_prompts/polar_reference.mdx", "./system_prompts/polar_syntax.mdx"],
-        read_mdx_file("./user_input/test_1.mdx"),
-        "./results",
-        "test" + f"{datetime.now()}"
-    )
-
-test_run()
