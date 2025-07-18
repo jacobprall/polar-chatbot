@@ -77,7 +77,7 @@
     - Implement auto-save with session integration
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 6.3 Implement policy generation interface
+  - [-] 6.3 Implement policy generation interface
     - Create generation trigger UI with progress indicators
     - Build policy display component with syntax highlighting
     - Add generation history and version management UI

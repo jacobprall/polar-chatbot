@@ -24,33 +24,17 @@ class SessionPolicyGenerator:
     
     def __init__(self, 
                  ai_service: SessionAwareOpenAIService,
-                 validator: Optional[PolarValidator] = None):
+                 validator: Optional[PolarValidator] = None,
+                 max_retries: int = 3):
         self.ai_service = ai_service
         self.validator = validator
-        self.max_retries = 3
+        self.max_retries = max_retries
     
     def generate_policy(self, request: PolicyGenerationRequest, session: Session) -> PolicyGenerationResult:
         """Generate a Polar policy for the given session"""
         logger.info(f"Generating policy for session {session.id}")
-        
-        # Generate the policy using AI service
         result = self.ai_service.generate_policy(request, session)
-        
-        if result.is_successful():
-            # Create and add the policy to the session
-            policy = GeneratedPolicy.create(
-                content=result.policy_content,
-                model_used=result.model_used,
-                tokens_used=result.tokens_used,
-                generation_time=result.generation_time
-            )
-            session.add_policy(policy)
-            
-            logger.info(f"Successfully generated policy {policy.id} for session {session.id}")
-        else:
-            logger.error(f"Policy generation failed for session {session.id}: {result.error_message}")
-        
-        return result
+        return self._process_generation_result(result, session, "policy")
     
     def generate_policy_stream(self, 
                              request: PolicyGenerationRequest, 
@@ -58,12 +42,13 @@ class SessionPolicyGenerator:
                              callback: Callable[[str], None]) -> PolicyGenerationResult:
         """Generate a Polar policy with streaming support"""
         logger.info(f"Generating policy with streaming for session {session.id}")
-        
-        # Generate the policy using streaming AI service
         result = self.ai_service.generate_policy_stream(request, session, callback)
-        
+        return self._process_generation_result(result, session, "streaming policy")
+    
+    def _process_generation_result(self, result: PolicyGenerationResult, 
+                                 session: Session, generation_type: str) -> PolicyGenerationResult:
+        """Process generation result and add policy to session if successful"""
         if result.is_successful():
-            # Create and add the policy to the session
             policy = GeneratedPolicy.create(
                 content=result.policy_content,
                 model_used=result.model_used,
@@ -71,10 +56,9 @@ class SessionPolicyGenerator:
                 generation_time=result.generation_time
             )
             session.add_policy(policy)
-            
-            logger.info(f"Successfully generated streaming policy {policy.id} for session {session.id}")
+            logger.info(f"Successfully generated {generation_type} {policy.id} for session {session.id}")
         else:
-            logger.error(f"Streaming policy generation failed for session {session.id}: {result.error_message}")
+            logger.error(f"{generation_type.title()} generation failed for session {session.id}: {result.error_message}")
         
         return result
     
@@ -124,58 +108,7 @@ class SessionPolicyGenerator:
                               validation_errors: List[str],
                               retry_count: int = 0) -> PolicyGenerationResult:
         """Retry policy generation with error context"""
-        if retry_count >= self.max_retries:
-            logger.error(f"Maximum retry attempts ({self.max_retries}) reached for session {session.id}")
-            return PolicyGenerationResult(
-                success=False,
-                error_message=f"Maximum retry attempts ({self.max_retries}) exceeded"
-            )
-        
-        logger.info(f"Retrying policy generation for session {session.id} (attempt {retry_count + 1})")
-        
-        # Get the current policy for context
-        current_policy = session.get_current_policy()
-        if not current_policy:
-            logger.error(f"No current policy found for retry in session {session.id}")
-            return PolicyGenerationResult(
-                success=False,
-                error_message="No current policy found for retry"
-            )
-        
-        # Build retry context
-        retry_context = PolicyRetryContext(
-            original_requirements=session.requirements_text,
-            previous_policy=current_policy.content,
-            validation_errors=validation_errors,
-            retry_count=retry_count
-        )
-        
-        # Create retry request
-        retry_request = PolicyGenerationRequest(
-            session_id=session.id,
-            requirements_text=session.requirements_text,
-            retry_context=retry_context.get_retry_prompt_context(),
-            previous_errors=validation_errors
-        )
-        
-        # Generate new policy
-        result = self.ai_service.generate_policy(retry_request, session)
-        
-        if result.is_successful():
-            # Create and add the new policy to the session
-            policy = GeneratedPolicy.create(
-                content=result.policy_content,
-                model_used=result.model_used,
-                tokens_used=result.tokens_used,
-                generation_time=result.generation_time
-            )
-            session.add_policy(policy)
-            
-            logger.info(f"Successfully generated retry policy {policy.id} for session {session.id}")
-        else:
-            logger.error(f"Retry policy generation failed for session {session.id}: {result.error_message}")
-        
-        return result
+        return self._retry_policy_generation_internal(session, validation_errors, retry_count, streaming=False)
     
     def retry_policy_generation_stream(self,
                                      session: Session,
@@ -183,6 +116,13 @@ class SessionPolicyGenerator:
                                      callback: Callable[[str], None],
                                      retry_count: int = 0) -> PolicyGenerationResult:
         """Retry policy generation with streaming and error context"""
+        return self._retry_policy_generation_internal(session, validation_errors, retry_count, 
+                                                    streaming=True, callback=callback)
+    
+    def _retry_policy_generation_internal(self, session: Session, validation_errors: List[str],
+                                        retry_count: int, streaming: bool = False,
+                                        callback: Optional[Callable[[str], None]] = None) -> PolicyGenerationResult:
+        """Internal method for retry policy generation"""
         if retry_count >= self.max_retries:
             logger.error(f"Maximum retry attempts ({self.max_retries}) reached for session {session.id}")
             return PolicyGenerationResult(
@@ -190,9 +130,10 @@ class SessionPolicyGenerator:
                 error_message=f"Maximum retry attempts ({self.max_retries}) exceeded"
             )
         
-        logger.info(f"Retrying policy generation with streaming for session {session.id} (attempt {retry_count + 1})")
+        stream_text = "with streaming " if streaming else ""
+        logger.info(f"Retrying policy generation {stream_text}for session {session.id} (attempt {retry_count + 1})")
         
-        # Get the current policy for context
+        # Validate retry conditions
         current_policy = session.get_current_policy()
         if not current_policy:
             logger.error(f"No current policy found for retry in session {session.id}")
@@ -201,7 +142,20 @@ class SessionPolicyGenerator:
                 error_message="No current policy found for retry"
             )
         
-        # Build retry context
+        # Create retry request
+        retry_request = self._build_retry_request(session, current_policy, validation_errors, retry_count)
+        
+        # Generate new policy
+        if streaming and callback:
+            result = self.ai_service.generate_policy_stream(retry_request, session, callback)
+        else:
+            result = self.ai_service.generate_policy(retry_request, session)
+        
+        return self._process_generation_result(result, session, f"retry policy{' (streaming)' if streaming else ''}")
+    
+    def _build_retry_request(self, session: Session, current_policy: GeneratedPolicy,
+                           validation_errors: List[str], retry_count: int) -> PolicyGenerationRequest:
+        """Build retry request with context"""
         retry_context = PolicyRetryContext(
             original_requirements=session.requirements_text,
             previous_policy=current_policy.content,
@@ -209,32 +163,12 @@ class SessionPolicyGenerator:
             retry_count=retry_count
         )
         
-        # Create retry request
-        retry_request = PolicyGenerationRequest(
+        return PolicyGenerationRequest(
             session_id=session.id,
             requirements_text=session.requirements_text,
             retry_context=retry_context.get_retry_prompt_context(),
             previous_errors=validation_errors
         )
-        
-        # Generate new policy with streaming
-        result = self.ai_service.generate_policy_stream(retry_request, session, callback)
-        
-        if result.is_successful():
-            # Create and add the new policy to the session
-            policy = GeneratedPolicy.create(
-                content=result.policy_content,
-                model_used=result.model_used,
-                tokens_used=result.tokens_used,
-                generation_time=result.generation_time
-            )
-            session.add_policy(policy)
-            
-            logger.info(f"Successfully generated streaming retry policy {policy.id} for session {session.id}")
-        else:
-            logger.error(f"Streaming retry policy generation failed for session {session.id}: {result.error_message}")
-        
-        return result
     
     def get_generation_history(self, session: Session) -> List[GeneratedPolicy]:
         """Get the generation history for a session"""

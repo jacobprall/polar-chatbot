@@ -119,19 +119,16 @@ class SessionAwareOpenAIService:
     
     def _build_session_messages(self, request: PolicyGenerationRequest, session: Session) -> list[dict]:
         """Build context-aware messages for the API call"""
-        messages = []
-        
-        # System prompt with session context
-        system_prompt = self._build_system_prompt(session)
-        messages.append({"role": "system", "content": system_prompt})
+        messages = [
+            {"role": "system", "content": self._build_system_prompt(session)}
+        ]
         
         # Add conversation history if there are previous policies
         if session.generated_policies:
             messages.extend(self._build_conversation_history(session))
         
         # User prompt with requirements and retry context
-        user_prompt = self._build_user_prompt(request)
-        messages.append({"role": "user", "content": user_prompt})
+        messages.append({"role": "user", "content": self._build_user_prompt(request)})
         
         return messages
     
@@ -218,11 +215,12 @@ Session Context:
             
         content = content.strip()
         
-        # Remove polar code block markers
-        if content.startswith("```polar"):
-            content = content[8:]
-        elif content.startswith("```"):
-            content = content[3:]
+        # Remove code block markers using more Pythonic approach
+        prefixes = ["```polar", "```"]
+        for prefix in prefixes:
+            if content.startswith(prefix):
+                content = content[len(prefix):]
+                break
         
         if content.endswith("```"):
             content = content[:-3]

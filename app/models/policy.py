@@ -29,18 +29,13 @@ class PolicyGenerationRequest:
     """Request for policy generation within a session context."""
     session_id: str
     requirements_text: str
-    model_config: Dict[str, Any] = field(default_factory=dict)
+    model_config: Dict[str, Any] = field(default_factory=lambda: {
+        "model": "gpt-4",
+        "temperature": 0.1,
+        "max_tokens": None
+    })
     retry_context: Optional[str] = None
     previous_errors: List[str] = field(default_factory=list)
-    
-    def __post_init__(self):
-        """Set default model configuration if not provided."""
-        if not self.model_config:
-            self.model_config = {
-                "model": "gpt-4",
-                "temperature": 0.1,
-                "max_tokens": None
-            }
 
 
 @dataclass

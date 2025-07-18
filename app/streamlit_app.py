@@ -102,16 +102,10 @@ def render_session_workspace(session: Session, session_manager: SessionManager) 
             clear_session_cache(session.id)
     
     with tab2:
-        st.info("🔧 Policy generation interface will be implemented in subtask 6.3.")
+        from app.ui.components.policy_generator import render_policy_generation_interface
         
-        # Show current policies if any
-        if session.generated_policies:
-            st.subheader(f"Generated Policies ({len(session.generated_policies)})")
-            for i, policy in enumerate(session.generated_policies):
-                with st.expander(f"Policy {i+1} - {policy.model_used} ({policy.generated_at.strftime('%Y-%m-%d %H:%M')})"):
-                    st.code(policy.content, language="text")
-        else:
-            st.info("No policies have been generated for this session yet.")
+        # Render the complete policy generation interface
+        render_policy_generation_interface(session, session_manager)
     
     with tab3:
         st.info("✅ Validation results interface will be implemented in subtask 6.4.")
