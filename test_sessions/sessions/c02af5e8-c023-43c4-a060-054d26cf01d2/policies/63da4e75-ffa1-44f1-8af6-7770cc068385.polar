@@ -1,0 +1,1 @@
+allow(user, "read", resource) if user.role = "admin";
