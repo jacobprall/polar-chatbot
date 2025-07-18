@@ -10,6 +10,10 @@ from .policy import (
     PolicyGenerationResult, PolicyValidationRequest, PolicyValidationResult,
     PolicyRetryContext
 )
+from .config import (
+    AppConfig, StreamlitConfig, StorageConfig, SessionsConfig,
+    OpenAIConfig, PolarConfig, EventsConfig, get_config, set_config
+)
 
 __all__ = [
     # Session models
@@ -24,5 +28,9 @@ __all__ = [
     # Policy models
     'PolicyStatus', 'ValidationStatus', 'PolicyGenerationRequest',
     'PolicyGenerationResult', 'PolicyValidationRequest', 'PolicyValidationResult',
-    'PolicyRetryContext'
+    'PolicyRetryContext',
+    
+    # Configuration models
+    'AppConfig', 'StreamlitConfig', 'StorageConfig', 'SessionsConfig',
+    'OpenAIConfig', 'PolarConfig', 'EventsConfig', 'get_config', 'set_config'
 ] 

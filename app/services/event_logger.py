@@ -88,6 +88,23 @@ class EventLogger:
         except Exception as e:
             raise EventStorageError(f"Failed to log event {event.id}: {e}")
     
+    async def log_event_async(self, event: SessionEvent) -> bool:
+        """
+        Async version of log_event for use in async contexts.
+        
+        Args:
+            event: The session event to log
+            
+        Returns:
+            True if event was successfully logged
+            
+        Raises:
+            EventStorageError: If event storage fails
+        """
+        # For now, just call the sync version
+        # In a real implementation, this could use async storage operations
+        return self.log_event(event)
+    
     def log_events(self, events: List[SessionEvent]) -> bool:
         """
         Log multiple events in batch.
