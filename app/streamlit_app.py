@@ -108,18 +108,10 @@ def render_session_workspace(session: Session, session_manager: SessionManager) 
         render_policy_generation_interface(session, session_manager)
     
     with tab3:
-        st.info("✅ Validation results interface will be implemented in subtask 6.4.")
+        from app.ui.components.validation_results import render_validation_results_interface
         
-        # Show validation results if any
-        if session.validation_results:
-            st.subheader(f"Validation Results ({len(session.validation_results)})")
-            for result in session.validation_results:
-                status_icon = "✅" if result.is_valid else "❌"
-                st.write(f"{status_icon} **Policy {result.policy_id}** - {result.validated_at.strftime('%Y-%m-%d %H:%M')}")
-                if result.error_message:
-                    st.error(result.error_message)
-        else:
-            st.info("No validation results available for this session yet.")
+        # Render the complete validation results interface
+        render_validation_results_interface(session, session_manager)
     
     with tab4:
         st.info("📋 Notes interface will be implemented in subtask 6.5.")
