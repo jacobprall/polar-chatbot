@@ -12,20 +12,38 @@ from ...services.session_manager import SessionManager, SessionManagerError
 from ...services.policy_generator import SessionPolicyGenerator
 from ...services.openai_service import SessionAwareOpenAIService
 from ...core.validator import PolarValidator
+from .error_handler import (
+    create_error_handler, handle_generation_error, handle_validation_error,
+    error_boundary, ErrorContext
+)
+from .retry_handler import (
+    create_retry_handler, retry_policy_generation, retry_policy_validation,
+    RetryConfig, RetryStrategy
+)
 
 
 def initialize_policy_generator() -> SessionPolicyGenerator:
     """Initialize and cache the policy generator."""
     if "policy_generator" not in st.session_state:
-        try:
+        error_handler = create_error_handler()
+        
+        with error_boundary(error_handler, ErrorContext(component="PolicyGenerator")):
             # Initialize OpenAI service
             openai_service = SessionAwareOpenAIService()
             
             # Initialize validator (optional)
             try:
                 validator = PolarValidator()
-            except Exception:
+            except Exception as e:
                 validator = None
+                error_handler.handle_error(
+                    e, 
+                    ErrorContext(
+                        component="PolarValidator",
+                        user_action="Initialization"
+                    ),
+                    show_immediately=False
+                )
                 st.warning("⚠️ Polar validator not available - validation will be skipped")
             
             # Create policy generator
@@ -33,9 +51,6 @@ def initialize_policy_generator() -> SessionPolicyGenerator:
                 ai_service=openai_service,
                 validator=validator
             )
-        except Exception as e:
-            st.error(f"❌ Failed to initialize policy generator: {str(e)}")
-            return None
     
     return st.session_state.policy_generator
 
@@ -369,27 +384,56 @@ def _handle_policy_generation(session: Session, session_manager: SessionManager,
 
 def _execute_generation(policy_generator: SessionPolicyGenerator, request: PolicyGenerationRequest,
                        session: Session, session_manager: SessionManager, streaming: bool) -> bool:
-    """Execute policy generation with progress tracking."""
+    """Execute policy generation with progress tracking and error handling."""
     progress_placeholder = st.empty()
     content_placeholder = st.empty()
+    error_handler = create_error_handler()
     
-    try:
-        progress_placeholder.info("🔄 Generating policy...")
-        
+    def generation_operation():
         if streaming:
             generated_content = []
             def stream_callback(chunk: str):
                 generated_content.append(chunk)
                 content_placeholder.code(''.join(generated_content), language="text")
             
-            result = policy_generator.generate_policy_stream(request, session, stream_callback)
+            return policy_generator.generate_policy_stream(request, session, stream_callback)
         else:
-            result = policy_generator.generate_policy(request, session)
+            return policy_generator.generate_policy(request, session)
+    
+    # Use retry mechanism for generation
+    retry_config = RetryConfig(
+        max_attempts=2,
+        strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+        base_delay=1.0,
+        show_progress=False  # We handle progress ourselves
+    )
+    
+    try:
+        progress_placeholder.info("🔄 Generating policy...")
         
-        return _handle_generation_result(result, session, session_manager, progress_placeholder, content_placeholder)
+        retry_handler = create_retry_handler()
+        success, result = retry_handler.retry_with_ui(
+            operation=generation_operation,
+            operation_name="Policy Generation",
+            config=retry_config,
+            context=ErrorContext(
+                session_id=session.id,
+                user_action="Policy Generation",
+                component="PolicyGenerator"
+            ),
+            container=st.empty()  # Use empty container to avoid duplicate messages
+        )
+        
+        if success and result:
+            return _handle_generation_result(result, session, session_manager, progress_placeholder, content_placeholder)
+        else:
+            progress_placeholder.error("❌ Policy generation failed after retries")
+            content_placeholder.empty()
+            return False
     
     except Exception as e:
-        progress_placeholder.error(f"❌ Generation error: {str(e)}")
+        handle_generation_error(e, session.id, error_handler)
+        progress_placeholder.error("❌ Unexpected generation error occurred")
         content_placeholder.empty()
         return False
 
@@ -479,16 +523,15 @@ def _execute_retry_generation(policy_generator: SessionPolicyGenerator, request:
 
 def _handle_policy_validation(policy: GeneratedPolicy, session: Session, 
                             session_manager: SessionManager) -> None:
-    """Handle policy validation request."""
+    """Handle policy validation request with error handling and retry."""
     policy_generator = initialize_policy_generator()
     if not policy_generator:
         return
     
     progress_placeholder = st.empty()
+    error_handler = create_error_handler()
     
-    try:
-        progress_placeholder.info("🔄 Validating policy...")
-        
+    def validation_operation():
         # Validate the policy
         validation_result = policy_generator.validate_policy(
             policy.content, policy.id, session.id
@@ -506,13 +549,51 @@ def _handle_policy_validation(policy: GeneratedPolicy, session: Session,
         session.add_validation_result(result)
         session_manager.save_session(session)
         
-        if validation_result.is_valid:
-            progress_placeholder.success(f"✅ Policy validation passed! ({validation_result.validation_time:.2f}s)")
+        return validation_result
+    
+    # Use retry mechanism for validation
+    retry_config = RetryConfig(
+        max_attempts=2,
+        strategy=RetryStrategy.FIXED_DELAY,
+        base_delay=1.0,
+        show_progress=False  # We handle progress ourselves
+    )
+    
+    try:
+        progress_placeholder.info("🔄 Validating policy...")
+        
+        retry_handler = create_retry_handler()
+        success, validation_result = retry_handler.retry_with_ui(
+            operation=validation_operation,
+            operation_name="Policy Validation",
+            config=retry_config,
+            context=ErrorContext(
+                session_id=session.id,
+                user_action="Policy Validation",
+                component="PolarValidator",
+                additional_data={"policy_id": policy.id}
+            ),
+            container=st.empty()  # Use empty container to avoid duplicate messages
+        )
+        
+        if success and validation_result:
+            if validation_result.is_valid:
+                progress_placeholder.success(f"✅ Policy validation passed! ({validation_result.validation_time:.2f}s)")
+            else:
+                progress_placeholder.error(f"❌ Policy validation failed ({validation_result.validation_time:.2f}s)")
+                
+                # Show validation errors with retry option
+                with st.expander("🔍 Validation Error Details", expanded=True):
+                    st.code(validation_result.error_message, language="text")
+                    
+                    if st.button("🔄 Retry Generation with Error Context", key=f"retry_validation_{policy.id}"):
+                        st.info("💡 Use the 'Retry with Errors' button in the generation section to fix these issues")
         else:
-            progress_placeholder.error(f"❌ Policy validation failed ({validation_result.validation_time:.2f}s)")
+            progress_placeholder.error("❌ Policy validation failed after retries")
     
     except Exception as e:
-        progress_placeholder.error(f"❌ Validation error: {str(e)}")
+        handle_validation_error(e, policy.id, session.id, error_handler)
+        progress_placeholder.error("❌ Unexpected validation error occurred")
 
 
 def _handle_policy_deletion(policy: GeneratedPolicy, session: Session, 
